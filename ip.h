@@ -19,13 +19,14 @@
 #define IP_ADDR_STR_LEN 16 /* "ddd.ddd.ddd.ddd\0" */
 
 /* see https://www.iana.org/assignments/protocol-numbers/protocol-numbers.txt */
-#define IP_PROTOCOL_ICMP  1
-#define IP_PROTOCOL_TCP   6
-#define IP_PROTOCOL_UDP  17
+#define IP_PROTOCOL_ICMP 1
+#define IP_PROTOCOL_TCP 6
+#define IP_PROTOCOL_UDP 17
 
 typedef uint32_t ip_addr_t;
 
-struct ip_iface {
+struct ip_iface
+{
     struct net_iface iface;
     struct ip_iface *next;
     ip_addr_t unicast;
@@ -40,6 +41,11 @@ extern int
 ip_addr_pton(const char *p, ip_addr_t *n);
 extern char *
 ip_addr_ntop(ip_addr_t n, char *p, size_t size);
+
+extern int
+ip_route_set_default_gateway(struct ip_iface *iface, const char *gateway);
+extern struct ip_iface *
+ip_route_get_iface(ip_addr_t dst);
 
 extern struct ip_iface *
 ip_iface_alloc(const char *addr, const char *netmask);
