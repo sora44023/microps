@@ -45,11 +45,11 @@ struct ip_route
 
 const ip_addr_t IP_ADDR_ANY = 0x00000000;       /* 0.0.0.0 */
 const ip_addr_t IP_ADDR_BROADCAST = 0xffffffff; /* 255.255.255.255 */
-static struct ip_route *routes;
 
 /* NOTE: if you want to add/delete the entries after net_run(), you need to protect these lists with a mutex. */
 static struct ip_iface *ifaces;
 static struct ip_protocol *protocols;
+static struct ip_route *routes;
 
 int ip_addr_pton(const char *p, ip_addr_t *n)
 {
@@ -136,7 +136,12 @@ ip_route_add(ip_addr_t network, ip_addr_t netmask, ip_addr_t nexthop, struct ip_
         errorf("memory_alloc() failure");
         return NULL;
     }
-
+    route->network = network;
+    route->netmask = netmask;
+    route->nexthop = nexthop;
+    route->iface = iface;
+    route->next = routes;
+    routes = route;
     infof("route added: network=%s, netmask=%s, nexthop=%s, iface=%s dev=%s",
           ip_addr_ntop(route->network, addr1, sizeof(addr1)),
           ip_addr_ntop(route->netmask, addr2, sizeof(addr2)),
@@ -233,6 +238,11 @@ int ip_iface_register(struct net_device *dev, struct ip_iface *iface)
     if (net_device_add_iface(dev, NET_IFACE(iface)) == -1)
     {
         errorf("net_device_add_iface() failure");
+        return -1;
+    }
+    if (!ip_route_add(iface->unicast & iface->netmask, iface->netmask, IP_ADDR_ANY, iface))
+    {
+        errorf("ip_route_add() failure");
         return -1;
     }
     iface->next = ifaces;
@@ -442,13 +452,13 @@ ip_output(uint8_t protocol, const uint8_t *data, size_t len, ip_addr_t src, ip_a
     route = ip_route_lookup(dst);
     if (!route)
     {
-        errorf("no route to host, addr=%s", ip_addr_ntop(dst, addr, sizeof(addr)));
+        errorf("no route to host, dst=%s", ip_addr_ntop(dst, addr, sizeof(addr)));
         return -1;
     }
     iface = route->iface;
     if (src != IP_ADDR_ANY && src != iface->unicast)
     {
-        errorf("unable to output with specified source address, addr=%s", ip_addr_ntop(src, addr, sizeof(addr)));
+        errorf("unable to output with specified source address, src=%s", ip_addr_ntop(src, addr, sizeof(addr)));
         return -1;
     }
     nexthop = (route->nexthop != IP_ADDR_ANY) ? route->nexthop : dst;
@@ -465,4 +475,14 @@ ip_output(uint8_t protocol, const uint8_t *data, size_t len, ip_addr_t src, ip_a
         return -1;
     }
     return len;
+}
+
+int ip_init(void)
+{
+    if (net_protocol_register(NET_PROTOCOL_TYPE_IP, ip_input) == -1)
+    {
+        errorf("net_protocol_register() failure");
+        return -1;
+    }
+    return 0;
 }
